@@ -1,18 +1,19 @@
 package main
 
 import (
-	"context"
+	// "context"
+	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
-	"os"
-	"pack.ag/amqp"
+	// "qpid.apache.org/amqp"
+	"qpid.apache.org/electron"
 )
 
 func main() {
 
 	dbfile := "./test.db"
-	os.Remove(dbfile)
 
 	db, err := sql.Open("sqlite3", dbfile)
 	if err != nil {
@@ -20,31 +21,55 @@ func main() {
 	}
 	defer db.Close()
 
-	client, err := amqp.Dial("amqps://localhost:5671", amqp.ConnSASLPlain("test", "test"))
-	if err != nil {
-		log.Fatal("Dialing AMQP server:", err)
-	}
-	defer client.Close()
+	// Create initial database table
+	tableCreate := `
+        create table if not exists devices (id integer not null primary key, device_id text);
+	create table if not exists events (id integer not null primary key, insertion_time integer, creation_time integer, device_id integer, payload text);
+	create table if not exists telemetry (id integer not null primary key, insertion_time integer, creation_time integer, device_id integer, payload text);
+        `
 
-	session, err := client.NewSession()
+	_, err = db.Exec(tableCreate)
 	if err != nil {
-		log.Fatal("Creating AMQP session:", err)
-	}
-
-	ctx := context.Background()
-
-	receiver, err := session.NewReceiver(
-		amqp.LinkSourceAddress("/events"),
-		amqp.LinkCredit(10))
-	if err != nil {
-		log.Fatal("Creating AMQP receiver:", err)
+		log.Fatal("Creating Database Tables:", err)
 	}
 
-	msg, err := receiver.Receive(ctx)
-	if err != nil {
-		log.Fatal("Reading message:", err)
-	}
-	// TODO: Store in sqlite3 db
+	// create a pool of trusted certs
+	certPool := x509.NewCertPool()
+	// TODO: certPool.AppendCertsFromPEM(messagingCaPEM)
 
-	msg.Accept()
+	// configure a client to use trust those certificates
+
+	config := tls.Config{RootCAs: certPool, InsecureSkipVerify: true}
+	tlsConn, err := tls.Dial("tcp", "messaging-h8gi9otom6-enmasse-infra.192.168.1.56.nip.io:443", &config)
+	if err != nil {
+		log.Fatal("Dialing TLS endpoint:", err)
+	}
+	defer tlsConn.Close()
+
+	opts := []electron.ConnectionOption{
+		electron.ContainerId("event-sink"),
+		electron.SASLEnable(),
+		electron.SASLAllowInsecure(true),
+		electron.User("consumer"),
+		electron.Password([]byte("foobar")),
+	}
+	conn, err := electron.NewConnection(tlsConn, opts...)
+	if err != nil {
+		log.Fatal("Connecting AMQP server:", err)
+	}
+	defer conn.Close(nil)
+
+	ropts := []electron.LinkOption{electron.Source("telemetry/teig.iot")}
+	receiver, err := conn.Receiver(ropts...)
+	for {
+		if rm, err := receiver.Receive(); err == nil {
+			// TODO: Store in sqlite3 db
+			rm.Accept()
+		} else if err == electron.Closed {
+			return
+		} else {
+			log.Fatal("Receive message:", err)
+		}
+	}
+
 }
