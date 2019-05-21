@@ -49,13 +49,15 @@ func main() {
 			err := datastore.InsertNewEntry(insertTime, creationTime, deviceId, payload)
 			if err != nil {
 				log.Fatal("Insert entry into datastore:", err)
+				rm.Reject()
+			} else {
+				rm.Accept()
 			}
-			rm.Accept()
 		} else if err == electron.Closed {
 			log.Print("Subscription closed")
 			return
 		} else {
-			log.Fatal("Receive message:", err)
+			log.Print("Receive message:", err)
 		}
 	}
 
