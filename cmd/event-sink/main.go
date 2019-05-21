@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
 	"log"
+	"time"
 	// "qpid.apache.org/amqp"
 	"qpid.apache.org/electron"
 )
@@ -63,7 +64,39 @@ func main() {
 	receiver, err := conn.Receiver(ropts...)
 	for {
 		if rm, err := receiver.Receive(); err == nil {
-			// TODO: Store in sqlite3 db
+			message := rm.Message
+
+			insertTime := time.Now().UTC().Unix()
+
+			deviceId := message.ApplicationProperties()["device_id"]
+			creationTime := message.Properties()["creation-time"]
+			payload := message.Body()
+
+			tx, err := db.Begin()
+			if err != nil {
+				log.Fatal("Starting transaction:", err)
+			}
+			removeStmt, err := tx.Prepare("DELETE FROM telemetry WHERE ROWID IN (SELECT ROWID FROM telemetry WHERE (SELECT SUM(size) FROM telemetry AS _ WHERE insertion_time <= telemetry.insertion_time AND device_id = ?) <= 100)")
+			if err != nil {
+				log.Fatal("Preparing remove statement:", err)
+			}
+			defer removeStmt.Close()
+
+			insertStmt, err := tx.Prepare("INSERT INTO telemetry(insertion_time, creation_time, device_id, payload) values(?, ?, ?, ?)")
+			if err != nil {
+				log.Fatal("Preparing insert statement:", err)
+			}
+			defer insertStmt.Close()
+
+			_, err = removeStmt.Exec(deviceId)
+			if err != nil {
+				log.Fatal("Removing oldest entry:", err)
+			}
+			_, err = insertStmt.Exec(insertTime, creationTime, deviceId, payload)
+			if err != nil {
+				log.Fatal("Inserting entry:", err)
+			}
+			tx.Commit()
 			rm.Accept()
 		} else if err == electron.Closed {
 			return
