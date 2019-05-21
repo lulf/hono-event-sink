@@ -1,4 +1,4 @@
-all: build container_build
+all: build 
 
 container_build: build
 	podman build -t event-sink:latest .

@@ -4,8 +4,7 @@ import (
 	// "context"
 	"crypto/tls"
 	"crypto/x509"
-	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/lulf/teig-event-sink/pkg/datastore"
 	"log"
 	"time"
 	// "qpid.apache.org/amqp"
@@ -16,22 +15,15 @@ func main() {
 
 	dbfile := "./test.db"
 
-	db, err := sql.Open("sqlite3", dbfile)
+	datastore, err := datastore.NewSqliteDatastore(dbfile)
 	if err != nil {
-		log.Fatal("Opening Database:", err)
+		log.Fatal("Opening Datastore:", err)
 	}
-	defer db.Close()
+	defer datastore.Close()
 
-	// Create initial database table
-	tableCreate := `
-        create table if not exists devices (id integer not null primary key, device_id text);
-	create table if not exists events (id integer not null primary key, insertion_time integer, creation_time integer, device_id integer, payload text);
-	create table if not exists telemetry (id integer not null primary key, insertion_time integer, creation_time integer, device_id integer, payload text);
-        `
-
-	_, err = db.Exec(tableCreate)
+	err = datastore.Initialize()
 	if err != nil {
-		log.Fatal("Creating Database Tables:", err)
+		log.Fatal("Initializing Datastore:", err)
 	}
 
 	// create a pool of trusted certs
@@ -68,35 +60,14 @@ func main() {
 
 			insertTime := time.Now().UTC().Unix()
 
-			deviceId := message.ApplicationProperties()["device_id"]
-			creationTime := message.Properties()["creation-time"]
-			payload := message.Body()
+			deviceId := message.ApplicationProperties()["device_id"].(string)
+			creationTime := message.Properties()["creation-time"].(int64)
+			payload := message.Body().(string)
 
-			tx, err := db.Begin()
+			err := datastore.InsertNewEntry(insertTime, creationTime, deviceId, payload)
 			if err != nil {
-				log.Fatal("Starting transaction:", err)
+				log.Fatal("Insert entry into datastore:", err)
 			}
-			removeStmt, err := tx.Prepare("DELETE FROM telemetry WHERE ROWID IN (SELECT ROWID FROM telemetry WHERE (SELECT SUM(size) FROM telemetry AS _ WHERE insertion_time <= telemetry.insertion_time AND device_id = ?) <= 100)")
-			if err != nil {
-				log.Fatal("Preparing remove statement:", err)
-			}
-			defer removeStmt.Close()
-
-			insertStmt, err := tx.Prepare("INSERT INTO telemetry(insertion_time, creation_time, device_id, payload) values(?, ?, ?, ?)")
-			if err != nil {
-				log.Fatal("Preparing insert statement:", err)
-			}
-			defer insertStmt.Close()
-
-			_, err = removeStmt.Exec(deviceId)
-			if err != nil {
-				log.Fatal("Removing oldest entry:", err)
-			}
-			_, err = insertStmt.Exec(insertTime, creationTime, deviceId, payload)
-			if err != nil {
-				log.Fatal("Inserting entry:", err)
-			}
-			tx.Commit()
 			rm.Accept()
 		} else if err == electron.Closed {
 			return
