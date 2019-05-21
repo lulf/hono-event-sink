@@ -50,7 +50,7 @@ func (ds SqlDatastore) InsertNewEntry(insertTime int64, creationTime int64, devi
 		log.Print("Starting transaction:", err)
 		return err
 	}
-	removeStmt, err := tx.Prepare("DELETE FROM telemetry WHERE ROWID IN (SELECT ROWID FROM telemetry WHERE (SELECT SUM(size) FROM telemetry AS _ WHERE insertion_time <= telemetry.insertion_time AND device_id = ?) <= 100)")
+	removeStmt, err := tx.Prepare("DELETE FROM telemetry WHERE device_id=? AND id NOT IN (SELECT id FROM telemetry WHERE device_id=? ORDER BY insertion_time DESC LIMIT ?)")
 	if err != nil {
 		log.Print("Preparing remove statement:", err)
 		return err
@@ -64,7 +64,7 @@ func (ds SqlDatastore) InsertNewEntry(insertTime int64, creationTime int64, devi
 	}
 	defer insertStmt.Close()
 
-	_, err = removeStmt.Exec(deviceId)
+	_, err = removeStmt.Exec(deviceId, deviceId, ds.maxSize-1)
 	if err != nil {
 		log.Print("Removing oldest entry:", err)
 		return err
@@ -74,6 +74,5 @@ func (ds SqlDatastore) InsertNewEntry(insertTime int64, creationTime int64, devi
 		log.Print("Inserting entry:", err)
 		return err
 	}
-	tx.Commit()
-	return nil
+	return tx.Commit()
 }
