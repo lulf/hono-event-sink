@@ -6,9 +6,8 @@ package main
 
 import (
 	// "context"
-	"crypto/tls"
-	"crypto/x509"
 	"github.com/lulf/teig-event-sink/pkg/datastore"
+	"github.com/lulf/teig-event-sink/pkg/eventsource"
 	"log"
 	"time"
 	// "qpid.apache.org/amqp"
@@ -30,36 +29,15 @@ func main() {
 		log.Fatal("Initializing Datastore:", err)
 	}
 
-	// create a pool of trusted certs
-	certPool := x509.NewCertPool()
-	// TODO: certPool.AppendCertsFromPEM(messagingCaPEM)
+	es := eventsource.NewAmqpEventSource("messaging-h8gi9otom6-enmasse-infra.192.168.1.56.nip.io:443", "consumer", "foobar", nil)
+	defer es.Close()
 
-	// configure a client to use trust those certificates
-
-	config := tls.Config{RootCAs: certPool, InsecureSkipVerify: true}
-	tlsConn, err := tls.Dial("tcp", "messaging-h8gi9otom6-enmasse-infra.192.168.1.56.nip.io:443", &config)
+	telemetrySub, err := es.Subscribe("telemetry/teig.iot")
 	if err != nil {
-		log.Fatal("Dialing TLS endpoint:", err)
+		log.Fatal("Subscribing to telemetry:", err)
 	}
-	defer tlsConn.Close()
-
-	opts := []electron.ConnectionOption{
-		electron.ContainerId("event-sink"),
-		electron.SASLEnable(),
-		electron.SASLAllowInsecure(true),
-		electron.User("consumer"),
-		electron.Password([]byte("foobar")),
-	}
-	conn, err := electron.NewConnection(tlsConn, opts...)
-	if err != nil {
-		log.Fatal("Connecting AMQP server:", err)
-	}
-	defer conn.Close(nil)
-
-	ropts := []electron.LinkOption{electron.Source("telemetry/teig.iot")}
-	receiver, err := conn.Receiver(ropts...)
 	for {
-		if rm, err := receiver.Receive(); err == nil {
+		if rm, err := telemetrySub.Receive(); err == nil {
 			message := rm.Message
 
 			insertTime := time.Now().UTC().Unix()
@@ -74,6 +52,7 @@ func main() {
 			}
 			rm.Accept()
 		} else if err == electron.Closed {
+			log.Print("Subscription closed")
 			return
 		} else {
 			log.Fatal("Receive message:", err)

@@ -1,3 +1,3 @@
 TODO Implement persistence of AMQP telemetry and events
-TODO Implement rotation of last N telemetry and event messages per device
-TODO Split database handling and amqp handling into libraries
+DONE Implement rotation of last N telemetry and event messages per device
+DONE Split database handling and amqp handling into libraries
