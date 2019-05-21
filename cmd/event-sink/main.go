@@ -19,7 +19,7 @@ func main() {
 
 	dbfile := "./test.db"
 
-	datastore, err := datastore.NewSqliteDatastore(dbfile)
+	datastore, err := datastore.NewSqliteDatastore(dbfile, 10)
 	if err != nil {
 		log.Fatal("Opening Datastore:", err)
 	}

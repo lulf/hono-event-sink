@@ -15,5 +15,6 @@ type Datastore interface {
 }
 
 type SqlDatastore struct {
-	handle *sql.DB
+	handle  *sql.DB
+	maxSize int
 }

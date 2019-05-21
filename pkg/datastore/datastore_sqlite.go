@@ -14,7 +14,7 @@ func (ds SqlDatastore) Close() {
 	ds.handle.Close()
 }
 
-func NewSqliteDatastore(fileName string) (*SqlDatastore, error) {
+func NewSqliteDatastore(fileName string, maxSize int) (*SqlDatastore, error) {
 
 	db, err := sql.Open("sqlite3", fileName)
 	if err != nil {
@@ -23,7 +23,8 @@ func NewSqliteDatastore(fileName string) (*SqlDatastore, error) {
 	}
 
 	return &SqlDatastore{
-		handle: db,
+		handle:  db,
+		maxSize: maxSize,
 	}, nil
 }
 
