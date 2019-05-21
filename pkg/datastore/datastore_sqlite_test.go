@@ -5,13 +5,14 @@
 package datastore
 
 import (
-	"context"
+	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
-
-	"fmt"
 )
 
 func TestInitialize(t *testing.T) {
-	//	t.Fatalf("get deployment: (%v)", err)
-	// t.Error("deployment container not set")
+	os.Remove("test.db")
+	ds, err := NewSqliteDatastore("test.db")
+	assert.Nil(t, err)
+	assert.NotNil(t, ds)
 }
