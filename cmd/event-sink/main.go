@@ -5,11 +5,11 @@
 package main
 
 import (
-	// "context"
 	"flag"
 	"fmt"
 	"github.com/lulf/teig-event-sink/pkg/datastore"
 	"github.com/lulf/teig-event-sink/pkg/eventsource"
+	"io/ioutil"
 	"log"
 	"os"
 	"qpid.apache.org/amqp"
@@ -22,14 +22,18 @@ func main() {
 	var dbfile string
 	var maxlogsize int
 	var eventsourceAddr string
-	//var username string
-	//var password string
-	//var usessl bool
-	//var cafile string
+	var username string
+	var password string
+	var tlsEnabled bool
+	var cafile string
 
 	flag.StringVar(&dbfile, "d", "sink.db", "Path to database file")
 	flag.IntVar(&maxlogsize, "m", 100, "Max number of entries in log")
-	flag.StringVar(&eventsourceAddr, "e", "example.com:5672", "Address of AMQP event source")
+	flag.StringVar(&eventsourceAddr, "e", "", "Address of AMQP event source")
+	flag.StringVar(&username, "u", "", "Username for AMQP event source")
+	flag.StringVar(&password, "p", "", "Password for AMQP event source")
+	flag.BoolVar(&tlsEnabled, "s", false, "Enable TLS")
+	flag.StringVar(&cafile, "c", "", "Certificate CA file")
 
 	flag.Usage = func() {
 		fmt.Printf("Usage of %s:\n", os.Args[0])
@@ -37,6 +41,10 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	if eventsourceAddr == "" {
+		log.Fatal("Missing address of AMQP event source")
+	}
 
 	datastore, err := datastore.NewSqliteDatastore(dbfile, maxlogsize)
 	if err != nil {
@@ -49,7 +57,15 @@ func main() {
 		log.Fatal("Initializing Datastore:", err)
 	}
 
-	es := eventsource.NewAmqpEventSource(eventsourceAddr, "consumer", "foobar", true, nil)
+	var ca []byte
+	if cafile != "" {
+		ca, err = ioutil.ReadFile(cafile)
+		if err != nil {
+			log.Fatal("Reading CA file:", err)
+		}
+	}
+
+	es := eventsource.NewAmqpEventSource(eventsourceAddr, username, password, tlsEnabled, ca)
 	defer es.Close()
 
 	telemetrySub, err := es.Subscribe("telemetry/teig.iot")
