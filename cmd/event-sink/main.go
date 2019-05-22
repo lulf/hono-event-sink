@@ -29,7 +29,7 @@ func main() {
 		log.Fatal("Initializing Datastore:", err)
 	}
 
-	es := eventsource.NewAmqpEventSource("messaging-h8gi9otom6-enmasse-infra.192.168.1.56.nip.io:443", "consumer", "foobar", nil)
+	es := eventsource.NewAmqpEventSource("messaging-h8gi9otom6-enmasse-infra.192.168.1.56.nip.io:443", "consumer", "foobar", true, nil)
 	defer es.Close()
 
 	telemetrySub, err := es.Subscribe("telemetry/teig.iot")
