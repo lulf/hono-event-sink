@@ -17,13 +17,13 @@ func TestInitialize(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, ds)
 
-	_, err = ds.handle.Exec("SELECT telemetry FROM sqlite_master WHERE type='table'")
+	_, err = ds.handle.Exec("SELECT events FROM sqlite_master WHERE type='table'")
 	assert.NotNil(t, err)
 
 	err = ds.Initialize()
 	assert.Nil(t, err)
 
-	_, err = ds.handle.Exec("SELECT telemetry FROM sqlite_master WHERE type='table'")
+	_, err = ds.handle.Exec("SELECT events FROM sqlite_master WHERE type='table'")
 	assert.NotNil(t, err)
 }
 
@@ -67,7 +67,7 @@ func TestInsertNewEntry(t *testing.T) {
 
 func countEntries(t *testing.T, ds *SqlDatastore) (int, error) {
 	var count int
-	row := ds.handle.QueryRow("SELECT COUNT(id) FROM telemetry")
+	row := ds.handle.QueryRow("SELECT COUNT(id) FROM events")
 	assert.NotNil(t, row)
 	err := row.Scan(&count)
 	return count, err

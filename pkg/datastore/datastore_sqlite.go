@@ -31,9 +31,7 @@ func NewSqliteDatastore(fileName string, maxSize int) (*SqlDatastore, error) {
 func (ds SqlDatastore) Initialize() error {
 	// Create initial database table
 	tableCreate := `
-        create table if not exists devices (id integer not null primary key, device_id text);
 	create table if not exists events (id integer not null primary key, insertion_time integer, creation_time integer, device_id integer, payload text);
-	create table if not exists telemetry (id integer not null primary key, insertion_time integer, creation_time integer, device_id integer, payload text);
         `
 
 	_, err := ds.handle.Exec(tableCreate)
@@ -51,14 +49,14 @@ func (ds SqlDatastore) InsertNewEntry(insertTime int64, creationTime int64, devi
 		return err
 	}
 
-	insertStmt, err := tx.Prepare("INSERT INTO telemetry(insertion_time, creation_time, device_id, payload) values(?, ?, ?, ?)")
+	insertStmt, err := tx.Prepare("INSERT INTO events(insertion_time, creation_time, device_id, payload) values(?, ?, ?, ?)")
 	if err != nil {
 		log.Print("Preparing insert statement:", err)
 		return err
 	}
 	defer insertStmt.Close()
 
-	removeStmt, err := tx.Prepare("DELETE FROM telemetry WHERE device_id=? AND id NOT IN (SELECT id FROM telemetry WHERE device_id=? ORDER BY insertion_time DESC LIMIT ?)")
+	removeStmt, err := tx.Prepare("DELETE FROM events WHERE device_id=? AND id NOT IN (SELECT id FROM events WHERE device_id=? ORDER BY insertion_time DESC LIMIT ?)")
 	if err != nil {
 		log.Print("Preparing remove statement:", err)
 		return err
