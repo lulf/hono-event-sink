@@ -9,9 +9,9 @@ import (
 	"github.com/lulf/teig-event-sink/pkg/datastore"
 	"github.com/lulf/teig-event-sink/pkg/eventsource"
 	"log"
-	"time"
-	// "qpid.apache.org/amqp"
+	"qpid.apache.org/amqp"
 	"qpid.apache.org/electron"
+	"time"
 )
 
 func main() {
@@ -36,29 +36,46 @@ func main() {
 	if err != nil {
 		log.Fatal("Subscribing to telemetry:", err)
 	}
+
+	eventSub, err := es.Subscribe("event/teig.iot")
+	if err != nil {
+		log.Fatal("Subscribing to event:", err)
+	}
+
+	go func() {
+		runSink(datastore, telemetrySub)
+	}()
+
+	go func() {
+		runSink(datastore, eventSub)
+	}()
+}
+
+func runSink(datastore datastore.Datastore, sub *eventsource.AmqpSubscription) {
 	for {
-		if rm, err := telemetrySub.Receive(); err == nil {
-			message := rm.Message
-
-			insertTime := time.Now().UTC().Unix()
-
-			deviceId := message.ApplicationProperties()["device_id"].(string)
-			creationTime := message.Properties()["creation-time"].(int64)
-			payload := message.Body().(string)
-
-			err := datastore.InsertNewEntry(insertTime, creationTime, deviceId, payload)
+		if rm, err := sub.Receive(); err == nil {
+			err := handleMessage(datastore, rm.Message)
 			if err != nil {
-				log.Fatal("Insert entry into datastore:", err)
+				log.Print("Insert entry into datastore:", err)
 				rm.Reject()
 			} else {
 				rm.Accept()
 			}
 		} else if err == electron.Closed {
-			log.Print("Subscription closed")
+			log.Print("Telemetry subscription closed")
 			return
 		} else {
-			log.Print("Receive message:", err)
+			log.Print("Receive telemetry message:", err)
 		}
 	}
+}
 
+func handleMessage(datastore datastore.Datastore, message amqp.Message) error {
+	insertTime := time.Now().UTC().Unix()
+
+	deviceId := message.ApplicationProperties()["device_id"].(string)
+	creationTime := message.Properties()["creation-time"].(int64)
+	payload := message.Body().(string)
+
+	return datastore.InsertNewEntry(insertTime, creationTime, deviceId, payload)
 }

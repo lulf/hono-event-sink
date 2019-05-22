@@ -7,7 +7,6 @@ package eventsource
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"log"
 	"qpid.apache.org/amqp"
 	"qpid.apache.org/electron"
 )
@@ -65,7 +64,6 @@ func (es *AmqpEventSource) Subscribe(source string) (*AmqpSubscription, error) {
 		config := tls.Config{RootCAs: certPool}
 		tlsConn, err := tls.Dial("tcp", es.address, &config)
 		if err != nil {
-			log.Print("Dialing TLS endpoint:", err)
 			return nil, err
 		}
 		es.tlsConn = tlsConn
@@ -81,7 +79,6 @@ func (es *AmqpEventSource) Subscribe(source string) (*AmqpSubscription, error) {
 		}
 		amqpConn, err := electron.NewConnection(es.tlsConn, opts...)
 		if err != nil {
-			log.Print("Connecting AMQP server:", err)
 			return nil, err
 		}
 		es.amqpConn = amqpConn
@@ -90,7 +87,6 @@ func (es *AmqpEventSource) Subscribe(source string) (*AmqpSubscription, error) {
 	ropts := []electron.LinkOption{electron.Source(source)}
 	r, err := es.amqpConn.Receiver(ropts...)
 	if err != nil {
-		log.Print("Creating receiver:", err)
 		return nil, err
 	}
 

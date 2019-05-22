@@ -9,7 +9,7 @@ import (
 )
 
 type Datastore interface {
-	Initialize()
+	Initialize() error
 	InsertNewEntry(insertTime int64, creationTime int64, deviceId string, payload string) error
 	Close()
 }
