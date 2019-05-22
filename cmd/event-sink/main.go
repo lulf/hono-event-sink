@@ -6,9 +6,12 @@ package main
 
 import (
 	// "context"
+	"flag"
+	"fmt"
 	"github.com/lulf/teig-event-sink/pkg/datastore"
 	"github.com/lulf/teig-event-sink/pkg/eventsource"
 	"log"
+	"os"
 	"qpid.apache.org/amqp"
 	"qpid.apache.org/electron"
 	"time"
@@ -16,9 +19,26 @@ import (
 
 func main() {
 
-	dbfile := "./test.db"
+	var dbfile string
+	var maxlogsize int
+	var eventsourceAddr string
+	//var username string
+	//var password string
+	//var usessl bool
+	//var cafile string
 
-	datastore, err := datastore.NewSqliteDatastore(dbfile, 10)
+	flag.StringVar(&dbfile, "d", "sink.db", "Path to database file")
+	flag.IntVar(&maxlogsize, "m", 100, "Max number of entries in log")
+	flag.StringVar(&eventsourceAddr, "e", "example.com:5672", "Address of AMQP event source")
+
+	flag.Usage = func() {
+		fmt.Printf("Usage of %s:\n", os.Args[0])
+		fmt.Printf("    -e example.com:5672 [-m 100] [-d sink.db] [-u user] [-p password] [-s] [-c cafile]\n")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	datastore, err := datastore.NewSqliteDatastore(dbfile, maxlogsize)
 	if err != nil {
 		log.Fatal("Opening Datastore:", err)
 	}
@@ -29,7 +49,7 @@ func main() {
 		log.Fatal("Initializing Datastore:", err)
 	}
 
-	es := eventsource.NewAmqpEventSource("messaging-h8gi9otom6-enmasse-infra.192.168.1.56.nip.io:443", "consumer", "foobar", true, nil)
+	es := eventsource.NewAmqpEventSource(eventsourceAddr, "consumer", "foobar", true, nil)
 	defer es.Close()
 
 	telemetrySub, err := es.Subscribe("telemetry/teig.iot")
