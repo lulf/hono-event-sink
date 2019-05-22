@@ -50,12 +50,6 @@ func (ds SqlDatastore) InsertNewEntry(insertTime int64, creationTime int64, devi
 		log.Print("Starting transaction:", err)
 		return err
 	}
-	removeStmt, err := tx.Prepare("DELETE FROM telemetry WHERE device_id=? AND id NOT IN (SELECT id FROM telemetry WHERE device_id=? ORDER BY insertion_time DESC LIMIT ?)")
-	if err != nil {
-		log.Print("Preparing remove statement:", err)
-		return err
-	}
-	defer removeStmt.Close()
 
 	insertStmt, err := tx.Prepare("INSERT INTO telemetry(insertion_time, creation_time, device_id, payload) values(?, ?, ?, ?)")
 	if err != nil {
@@ -64,15 +58,24 @@ func (ds SqlDatastore) InsertNewEntry(insertTime int64, creationTime int64, devi
 	}
 	defer insertStmt.Close()
 
-	_, err = removeStmt.Exec(deviceId, deviceId, ds.maxSize-1)
+	removeStmt, err := tx.Prepare("DELETE FROM telemetry WHERE device_id=? AND id NOT IN (SELECT id FROM telemetry WHERE device_id=? ORDER BY insertion_time DESC LIMIT ?)")
 	if err != nil {
-		log.Print("Removing oldest entry:", err)
+		log.Print("Preparing remove statement:", err)
 		return err
 	}
+	defer removeStmt.Close()
+
 	_, err = insertStmt.Exec(insertTime, creationTime, deviceId, payload)
 	if err != nil {
 		log.Print("Inserting entry:", err)
 		return err
 	}
+
+	_, err = removeStmt.Exec(deviceId, deviceId, ds.maxSize)
+	if err != nil {
+		log.Print("Removing oldest entry:", err)
+		return err
+	}
+
 	return tx.Commit()
 }
