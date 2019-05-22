@@ -85,7 +85,7 @@ func (es *AmqpEventSource) Subscribe(source string) (*AmqpSubscription, error) {
 			electron.ContainerId("event-sink"),
 		}
 		if es.username != "" && es.password != "" {
-			opts = append(opts, electron.SASLEnable(), electron.User(es.username), electron.Password([]byte(es.password)))
+			opts = append(opts, electron.SASLEnable(), electron.SASLAllowInsecure(true), electron.User(es.username), electron.Password([]byte(es.password)))
 		}
 		amqpConn, err := electron.NewConnection(es.tcpConn, opts...)
 		if err != nil {
