@@ -42,35 +42,33 @@ func TestInsertNewEntry(t *testing.T) {
 	err = ds.InsertNewEntry(1, 1, "dev1", "payload1")
 	assert.Nil(t, err)
 
-	row := ds.handle.QueryRow("SELECT COUNT(id) FROM telemetry")
-	assert.NotNil(t, row)
-	assert.Nil(t, err)
-	var count int
-	err = row.Scan(&count)
+	count, err := countEntries(t, ds)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, count)
 
 	err = ds.InsertNewEntry(2, 2, "dev2", "payload2")
 	assert.Nil(t, err)
-	row = ds.handle.QueryRow("SELECT COUNT(id) FROM telemetry")
-	assert.NotNil(t, row)
-	err = row.Scan(&count)
+	count, err = countEntries(t, ds)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, count)
 
 	err = ds.InsertNewEntry(3, 3, "dev2", "payload3")
 	assert.Nil(t, err)
-	row = ds.handle.QueryRow("SELECT COUNT(id) FROM telemetry")
-	assert.NotNil(t, row)
-	err = row.Scan(&count)
+	count, err = countEntries(t, ds)
 	assert.Nil(t, err)
 	assert.Equal(t, 3, count)
 
 	err = ds.InsertNewEntry(4, 4, "dev2", "payload4")
 	assert.Nil(t, err)
-	row = ds.handle.QueryRow("SELECT COUNT(id) FROM telemetry")
-	assert.NotNil(t, row)
-	err = row.Scan(&count)
+	count, err = countEntries(t, ds)
 	assert.Nil(t, err)
 	assert.Equal(t, 3, count)
+}
+
+func countEntries(t *testing.T, ds *SqlDatastore) (int, error) {
+	var count int
+	row := ds.handle.QueryRow("SELECT COUNT(id) FROM telemetry")
+	assert.NotNil(t, row)
+	err := row.Scan(&count)
+	return count, err
 }
