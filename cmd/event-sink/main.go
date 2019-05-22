@@ -82,9 +82,7 @@ func main() {
 		runSink(datastore, telemetrySub)
 	}()
 
-	go func() {
-		runSink(datastore, eventSub)
-	}()
+	runSink(datastore, eventSub)
 }
 
 func runSink(datastore datastore.Datastore, sub *eventsource.AmqpSubscription) {
