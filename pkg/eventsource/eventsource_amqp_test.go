@@ -7,7 +7,6 @@ package eventsource
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"log"
 	"net"
 	"qpid.apache.org/amqp"
 	"qpid.apache.org/electron"
@@ -16,10 +15,12 @@ import (
 
 type TestServer struct {
 	l net.Listener
+	s string
+	e error
 	c chan amqp.Message
 }
 
-func NewTestServer(t *testing.T) *TestServer {
+func NewTestServer(t *testing.T, source string) *TestServer {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -27,6 +28,8 @@ func NewTestServer(t *testing.T) *TestServer {
 
 	return &TestServer{
 		l: l,
+		s: source,
+		e: nil,
 		c: make(chan amqp.Message),
 	}
 }
@@ -36,24 +39,25 @@ func (s *TestServer) close() {
 	close(s.c)
 }
 
-func (s *TestServer) run() {
+func (s *TestServer) run(t *testing.T) {
 	cont := electron.NewContainer("test-server")
 	c, err := cont.Accept(s.l)
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	s.l.Close() // This server only accepts one connection
 
 	var snd electron.Sender
 	for snd == nil {
 		in := <-c.Incoming()
-		fmt.Println("\nIncoming connection")
 		switch in := in.(type) {
 		case *electron.IncomingSession, *electron.IncomingConnection:
 			in.Accept() // Accept the incoming connection and session for the sender
 		case *electron.IncomingSender:
 
-			fmt.Println(in.Target())
+			if s.s != in.Source() {
+				s.e = fmt.Errorf("Sender source '%s' does not match expected source '%s'", in.Source(), s.s)
+			}
 			snd = in.Accept().(electron.Sender)
 		case nil:
 			return // Connection is closed
@@ -79,9 +83,9 @@ func (s *TestServer) run() {
 }
 
 func TestSubscribe(t *testing.T) {
-	server := NewTestServer(t)
+	server := NewTestServer(t, "data")
 	defer server.close()
-	go server.run()
+	go server.run(t)
 
 	es := NewAmqpEventSource(server.l.Addr().String(), "", "", false, nil)
 
@@ -91,7 +95,6 @@ func TestSubscribe(t *testing.T) {
 
 	tm := amqp.NewMessage()
 	tm.ApplicationProperties()["device_id"] = "dev1"
-	tm.Properties()["creation-time"] = 1234
 	tm.Marshal("test")
 
 	server.c <- tm
@@ -99,5 +102,6 @@ func TestSubscribe(t *testing.T) {
 	rm, err := s.Receive()
 
 	m := rm.Message
-	fmt.Println(m)
+	assert.Nil(t, server.e)
+	assert.Equal(t, tm, m)
 }
