@@ -7,8 +7,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/lulf/teig-event-sink/pkg/datastore"
 	"github.com/lulf/teig-event-sink/pkg/eventsource"
+	"github.com/lulf/teig-event-store/pkg/datastore"
 	"io/ioutil"
 	"log"
 	"os"
@@ -46,13 +46,13 @@ func main() {
 		log.Fatal("Missing address of AMQP event source")
 	}
 
-	datastore, err := datastore.NewSqliteDatastore(dbfile, maxlogsize)
+	ds, err := datastore.NewSqliteDatastore(dbfile, maxlogsize)
 	if err != nil {
 		log.Fatal("Opening Datastore:", err)
 	}
-	defer datastore.Close()
+	defer ds.Close()
 
-	err = datastore.Initialize()
+	err = ds.Initialize()
 	if err != nil {
 		log.Fatal("Initializing Datastore:", err)
 	}
@@ -79,16 +79,16 @@ func main() {
 	}
 
 	go func() {
-		runSink(datastore, telemetrySub)
+		runSink(ds, telemetrySub)
 	}()
 
-	runSink(datastore, eventSub)
+	runSink(ds, eventSub)
 }
 
-func runSink(datastore datastore.Datastore, sub *eventsource.AmqpSubscription) {
+func runSink(ds datastore.Datastore, sub *eventsource.AmqpSubscription) {
 	for {
 		if rm, err := sub.Receive(); err == nil {
-			err := handleMessage(datastore, rm.Message)
+			err := handleMessage(ds, rm.Message)
 			if err != nil {
 				log.Print("Insert entry into datastore:", err)
 				rm.Reject()
@@ -104,12 +104,12 @@ func runSink(datastore datastore.Datastore, sub *eventsource.AmqpSubscription) {
 	}
 }
 
-func handleMessage(datastore datastore.Datastore, message amqp.Message) error {
+func handleMessage(ds datastore.Datastore, message amqp.Message) error {
 	insertTime := time.Now().UTC().Unix()
 
 	deviceId := message.ApplicationProperties()["device_id"].(string)
 	creationTime := message.Properties()["creation-time"].(int64)
 	payload := message.Body().(string)
 
-	return datastore.InsertNewEntry(insertTime, creationTime, deviceId, payload)
+	return ds.InsertEvent(datastore.NewEvent(insertTime, creationTime, deviceId, payload))
 }
