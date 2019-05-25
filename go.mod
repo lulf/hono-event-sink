@@ -1,4 +1,4 @@
-module github.com/lulf/teig-iot-service
+module github.com/lulf/teig-event-sink
 
 go 1.12
 

@@ -7,8 +7,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/lulf/teig-iot-service/pkg/datastore"
-	"github.com/lulf/teig-iot-service/pkg/eventsource"
+	"github.com/lulf/teig-event-sink/pkg/datastore"
+	"github.com/lulf/teig-event-sink/pkg/eventsource"
 	"io/ioutil"
 	"log"
 	"os"
