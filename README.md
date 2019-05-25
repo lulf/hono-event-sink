@@ -1,2 +1,3 @@
 # teig-event-sink
-Component that stores Bosch IoT Hub data
+
+The event-sink is a component that subscribes to Bosch IoT Hub telemetry and stores them in a local database.
