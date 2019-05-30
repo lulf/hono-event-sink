@@ -5,9 +5,11 @@
 package eventstore
 
 import (
+	"encoding/json"
 	"github.com/lulf/teig-event-store/pkg/datastore"
+	"log"
 	"net"
-	//	"qpid.apache.org/amqp"
+	"qpid.apache.org/amqp"
 	"qpid.apache.org/electron"
 )
 
@@ -81,7 +83,19 @@ func (es *AmqpEventStore) Publisher(target string) (*AmqpPublisher, error) {
 }
 
 func (pub *AmqpPublisher) Send(event *datastore.Event) error {
+	m := amqp.NewMessage()
+	data, err := json.Marshal(event)
+	if err != nil {
+		log.Print("Serializing event:", err)
+		return err
+	}
+	m.Marshal(data)
+	outcome := pub.snd.SendSync(m)
+	if outcome.Status == electron.Unsent || outcome.Status == electron.Unacknowledged {
+		return outcome.Error
+	}
 	return nil
+
 }
 
 func (pub *AmqpPublisher) Close() {
