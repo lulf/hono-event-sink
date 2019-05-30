@@ -8,27 +8,25 @@ import (
 	"flag"
 	"fmt"
 	"github.com/lulf/teig-event-sink/pkg/eventsource"
+	"github.com/lulf/teig-event-sink/pkg/eventstore"
 	"github.com/lulf/teig-event-store/pkg/datastore"
 	"io/ioutil"
 	"log"
 	"os"
 	"qpid.apache.org/amqp"
 	"qpid.apache.org/electron"
-	"time"
 )
 
 func main() {
 
-	var dbfile string
-	var maxlogsize int
+	var eventstoreAddr string
 	var eventsourceAddr string
 	var username string
 	var password string
 	var tlsEnabled bool
 	var cafile string
 
-	flag.StringVar(&dbfile, "d", "sink.db", "Path to database file")
-	flag.IntVar(&maxlogsize, "m", 100, "Max number of entries in log")
+	flag.StringVar(&eventstoreAddr, "a", "127.0.0.1:5672", "Address of AMQP event store")
 	flag.StringVar(&eventsourceAddr, "e", "", "Address of AMQP event source")
 	flag.StringVar(&username, "u", "", "Username for AMQP event source")
 	flag.StringVar(&password, "p", "", "Password for AMQP event source")
@@ -37,7 +35,7 @@ func main() {
 
 	flag.Usage = func() {
 		fmt.Printf("Usage of %s:\n", os.Args[0])
-		fmt.Printf("    -e example.com:5672 [-m 100] [-d sink.db] [-u user] [-p password] [-s] [-c cafile]\n")
+		fmt.Printf("    -e example.com:5672 [-u user] [-p password] [-s] [-c cafile] [-a 127.0.0.1:5672] \n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -46,15 +44,16 @@ func main() {
 		log.Fatal("Missing address of AMQP event source")
 	}
 
-	ds, err := datastore.NewSqliteDatastore(dbfile, maxlogsize)
-	if err != nil {
-		log.Fatal("Opening Datastore:", err)
-	}
-	defer ds.Close()
+	eventStore := eventstore.NewAmqpEventStore(eventstoreAddr)
 
-	err = ds.Initialize()
+	telemetryPub, err := eventStore.Publisher("events")
 	if err != nil {
-		log.Fatal("Initializing Datastore:", err)
+		log.Fatal("Creating publisher for telemetry:", err)
+	}
+
+	eventPub, err := eventStore.Publisher("events")
+	if err != nil {
+		log.Fatal("Creating publisher for events:", err)
 	}
 
 	var ca []byte
@@ -79,16 +78,16 @@ func main() {
 	}
 
 	go func() {
-		runSink(ds, telemetrySub)
+		runSink(telemetryPub, telemetrySub)
 	}()
 
-	runSink(ds, eventSub)
+	runSink(eventPub, eventSub)
 }
 
-func runSink(ds datastore.Datastore, sub *eventsource.AmqpSubscription) {
+func runSink(pub *eventstore.AmqpPublisher, sub *eventsource.AmqpSubscription) {
 	for {
 		if rm, err := sub.Receive(); err == nil {
-			err := handleMessage(ds, rm.Message)
+			err := handleMessage(pub, rm.Message)
 			if err != nil {
 				log.Print("Insert entry into datastore:", err)
 				rm.Reject()
@@ -104,12 +103,11 @@ func runSink(ds datastore.Datastore, sub *eventsource.AmqpSubscription) {
 	}
 }
 
-func handleMessage(ds datastore.Datastore, message amqp.Message) error {
-	insertTime := time.Now().UTC().Unix()
-
+func handleMessage(pub *eventstore.AmqpPublisher, message amqp.Message) error {
 	deviceId := message.ApplicationProperties()["device_id"].(string)
 	creationTime := message.Properties()["creation-time"].(int64)
 	payload := message.Body().(string)
 
-	return ds.InsertEvent(datastore.NewEvent(insertTime, creationTime, deviceId, payload))
+	event := datastore.NewEvent(0, 0, creationTime, deviceId, payload)
+	return pub.Send(event)
 }
