@@ -6,7 +6,7 @@ package eventstore
 
 import (
 	"encoding/json"
-	"github.com/lulf/teig-event-store/pkg/datastore"
+	"github.com/lulf/teig-event-store/pkg/api"
 	"log"
 	"net"
 	"qpid.apache.org/amqp"
@@ -82,7 +82,7 @@ func (es *AmqpEventStore) Publisher(target string) (*AmqpPublisher, error) {
 	return pub, nil
 }
 
-func (pub *AmqpPublisher) Send(event *datastore.Event) error {
+func (pub *AmqpPublisher) Send(event *api.Event) error {
 	m := amqp.NewMessage()
 	data, err := json.Marshal(event)
 	if err != nil {

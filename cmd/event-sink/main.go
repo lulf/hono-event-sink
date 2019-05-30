@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"github.com/lulf/teig-event-sink/pkg/eventsource"
 	"github.com/lulf/teig-event-sink/pkg/eventstore"
-	"github.com/lulf/teig-event-store/pkg/datastore"
+	"github.com/lulf/teig-event-store/pkg/api"
 	"io/ioutil"
 	"log"
 	"os"
@@ -108,6 +108,6 @@ func handleMessage(pub *eventstore.AmqpPublisher, message amqp.Message) error {
 	creationTime := message.Properties()["creation-time"].(int64)
 	payload := message.Body().(string)
 
-	event := datastore.NewEvent(0, 0, creationTime, deviceId, payload)
+	event := api.NewEvent(0, creationTime, deviceId, payload)
 	return pub.Send(event)
 }
