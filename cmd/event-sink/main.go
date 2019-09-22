@@ -107,10 +107,7 @@ func handleMessage(pub *eventstore.AmqpPublisher, message amqp.Message) error {
 	creationTime := message.Properties()["creation-time"].(int64)
 	payload := message.Body().(string)
 
-	event := &eventstore.Event{
-		CreationTime: creationTime,
-		DeviceId:     deviceId,
-		Payload:      payload,
-	}
+	event := eventstore.NewEvent(deviceId, creationTime, payload)
+
 	return pub.Send(event)
 }

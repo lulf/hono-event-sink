@@ -100,3 +100,11 @@ func (pub *AmqpPublisher) Send(event *Event) error {
 func (pub *AmqpPublisher) Close() {
 	pub.snd.Close(nil)
 }
+
+func NewEvent(deviceId string, creationTime int64, payload string) *Event {
+	return &Event{
+		CreationTime: creationTime,
+		DeviceId:     deviceId,
+		Payload:      payload,
+	}
+}
