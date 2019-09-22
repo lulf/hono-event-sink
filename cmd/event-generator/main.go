@@ -36,7 +36,7 @@ func main() {
 	}
 
 	opts := []electron.ConnectionOption{
-		electron.ContainerId("event-genereator"),
+		electron.ContainerId("event-generator"),
 	}
 	amqpConn, err := electron.NewConnection(tcpConn, opts...)
 	if err != nil {
