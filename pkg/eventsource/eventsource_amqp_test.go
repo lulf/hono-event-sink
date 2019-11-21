@@ -6,10 +6,10 @@ package eventsource
 
 import (
 	"fmt"
+	"github.com/apache/qpid-proton/go/pkg/amqp"
+	"github.com/apache/qpid-proton/go/pkg/electron"
 	"github.com/stretchr/testify/assert"
 	"net"
-	"qpid.apache.org/amqp"
-	"qpid.apache.org/electron"
 	"testing"
 )
 
@@ -99,9 +99,9 @@ func TestSubscribe(t *testing.T) {
 
 	server.c <- tm
 
-	rm, err := s.Receive()
+	m, err := s.Receive()
 
-	m := rm.Message
 	assert.Nil(t, server.e)
-	assert.Equal(t, tm, m)
+	assert.Equal(t, tm.ApplicationProperties()["device_id"], m.ApplicationProperties["device_id"])
+	assert.Equal(t, "test", m.Value)
 }

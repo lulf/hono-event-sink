@@ -5,18 +5,19 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/lulf/teig-event-sink/pkg/eventstore"
 	"log"
 	"math"
 	"math/rand"
-	"net"
 	"os"
-	"qpid.apache.org/amqp"
-	"qpid.apache.org/electron"
 	"time"
+
+	"pack.ag/amqp"
+
+	"github.com/lulf/teig-event-sink/pkg/eventstore"
 )
 
 func main() {
@@ -30,23 +31,19 @@ func main() {
 	}
 	flag.Parse()
 
-	tcpConn, err := net.Dial("tcp", "127.0.0.1:5672")
+	client, err := amqp.Dial("amqp://127.0.0.1:5672")
 	if err != nil {
-		log.Fatal("Dialing:", err)
+		log.Fatal("Dial:", err)
 	}
+	defer client.Close()
 
-	opts := []electron.ConnectionOption{
-		electron.ContainerId("event-generator"),
-	}
-	amqpConn, err := electron.NewConnection(tcpConn, opts...)
+	session, err := client.NewSession()
 	if err != nil {
-		log.Fatal("NewConnection:", err)
+		log.Fatal("Session:", err)
 	}
-
-	sopts := []electron.LinkOption{electron.Target("events")}
 	for id := 1; id <= numdevices; id++ {
 		device := fmt.Sprintf("Dings %d", id)
-		s, err := amqpConn.Sender(sopts...)
+		s, err := session.NewSender(amqp.LinkTargetAddress("events"))
 		if err != nil {
 			log.Fatal("Sender:", s)
 		}
@@ -59,7 +56,7 @@ func main() {
 	}
 }
 
-func runSender(device string, sender electron.Sender, wait int) {
+func runSender(device string, sender *amqp.Sender, wait int) {
 	log.Print(fmt.Sprintf("Running %s with interval %d", device, wait))
 	step := 0.1
 	startValue := rand.Float64() * math.Pi
@@ -75,17 +72,16 @@ func runSender(device string, sender electron.Sender, wait int) {
 		payload := fmt.Sprintf("%f", 15.0+(10.0*math.Sin(value)))
 		value += step
 		event := eventstore.NewEvent(device, now, payload)
-		m := amqp.NewMessage()
 		data, err := json.Marshal(event)
 		if err != nil {
 			log.Print("Serializing event:", device, err)
 			continue
 		}
 		log.Print(fmt.Sprintf("Woke up %s to send data: %s", device, data))
-		m.Marshal(data)
-		outcome := sender.SendSync(m)
-		if outcome.Status == electron.Unsent || outcome.Status == electron.Unacknowledged {
-			log.Print("Error sending:", outcome.Status)
+		m := amqp.NewMessage(data)
+		err = sender.Send(context.TODO(), m)
+		if err != nil {
+			log.Print("Sending event:", device, err)
 			continue
 		}
 	}

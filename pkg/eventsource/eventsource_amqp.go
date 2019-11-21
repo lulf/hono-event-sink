@@ -5,17 +5,18 @@
 package eventsource
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"net"
-	"qpid.apache.org/amqp"
-	"qpid.apache.org/electron"
+
+	"pack.ag/amqp"
 )
 
 type MessageHandler func(message amqp.Message) error
 
 type AmqpSubscription struct {
-	rcv electron.Receiver
+	rcv *amqp.Receiver
 }
 
 type AmqpEventSource struct {
@@ -25,7 +26,7 @@ type AmqpEventSource struct {
 	tlsEnabled    bool
 	caPem         []byte
 	tcpConn       net.Conn
-	amqpConn      electron.Connection
+	amqpClient    *amqp.Client
 	subscriptions []*AmqpSubscription
 }
 
@@ -37,7 +38,7 @@ func NewAmqpEventSource(address string, username string, password string, tlsEna
 		tlsEnabled:    tlsEnabled,
 		caPem:         caPem,
 		tcpConn:       nil,
-		amqpConn:      nil,
+		amqpClient:    nil,
 		subscriptions: make([]*AmqpSubscription, 0),
 	}
 }
@@ -47,8 +48,8 @@ func (es *AmqpEventSource) Close() error {
 		sub.Close()
 	}
 
-	if es.amqpConn != nil {
-		es.amqpConn.Close(nil)
+	if es.amqpClient != nil {
+		es.amqpClient.Close()
 	}
 
 	if es.tcpConn != nil {
@@ -80,22 +81,25 @@ func (es *AmqpEventSource) Subscribe(source string) (*AmqpSubscription, error) {
 		}
 	}
 
-	if es.amqpConn == nil {
-		opts := []electron.ConnectionOption{
-			electron.ContainerId("event-sink"),
+	if es.amqpClient == nil {
+		opts := []amqp.ConnOption{
+			amqp.ConnContainerID("event-sink"),
 		}
 		if es.username != "" && es.password != "" {
-			opts = append(opts, electron.SASLEnable(), electron.SASLAllowInsecure(true), electron.User(es.username), electron.Password([]byte(es.password)))
+			opts = append(opts, amqp.ConnSASLPlain(es.username, es.password))
 		}
-		amqpConn, err := electron.NewConnection(es.tcpConn, opts...)
+		amqpClient, err := amqp.New(es.tcpConn, opts...)
 		if err != nil {
 			return nil, err
 		}
-		es.amqpConn = amqpConn
+		es.amqpClient = amqpClient
 	}
 
-	ropts := []electron.LinkOption{electron.Source(source)}
-	r, err := es.amqpConn.Receiver(ropts...)
+	session, err := es.amqpClient.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	r, err := session.NewReceiver(amqp.LinkSourceAddress(source))
 	if err != nil {
 		return nil, err
 	}
@@ -107,8 +111,8 @@ func (es *AmqpEventSource) Subscribe(source string) (*AmqpSubscription, error) {
 	return sub, nil
 }
 
-func (sub *AmqpSubscription) Receive() (electron.ReceivedMessage, error) {
-	return sub.rcv.Receive()
+func (sub *AmqpSubscription) Receive() (*amqp.Message, error) {
+	return sub.rcv.Receive(context.TODO())
 }
 
 func (sub *AmqpSubscription) Close() {

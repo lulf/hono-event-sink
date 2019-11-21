@@ -5,29 +5,27 @@
 package eventstore
 
 import (
+	"context"
 	"encoding/json"
 	"log"
-	"net"
-	"qpid.apache.org/amqp"
-	"qpid.apache.org/electron"
+
+	"pack.ag/amqp"
 )
 
 type AmqpPublisher struct {
-	snd electron.Sender
+	snd *amqp.Sender
 }
 
 type AmqpEventStore struct {
 	address    string
-	tcpConn    net.Conn
-	amqpConn   electron.Connection
+	client     *amqp.Client
 	publishers []*AmqpPublisher
 }
 
 func NewAmqpEventStore(address string) *AmqpEventStore {
 	return &AmqpEventStore{
 		address:    address,
-		tcpConn:    nil,
-		amqpConn:   nil,
+		client:     nil,
 		publishers: make([]*AmqpPublisher, 0),
 	}
 }
@@ -37,39 +35,28 @@ func (es *AmqpEventStore) Close() error {
 		pub.Close()
 	}
 
-	if es.amqpConn != nil {
-		es.amqpConn.Close(nil)
-	}
-
-	if es.tcpConn != nil {
-		es.tcpConn.Close()
+	if es.client != nil {
+		es.client.Close()
 	}
 
 	return nil
 }
 
 func (es *AmqpEventStore) Publisher(target string) (*AmqpPublisher, error) {
-	if es.tcpConn == nil {
-		tcpConn, err := net.Dial("tcp", es.address)
+	if es.client == nil {
+		client, err := amqp.Dial(es.address)
 		if err != nil {
 			return nil, err
 		}
-		es.tcpConn = tcpConn
+		es.client = client
 	}
 
-	if es.amqpConn == nil {
-		opts := []electron.ConnectionOption{
-			electron.ContainerId("event-sink"),
-		}
-		amqpConn, err := electron.NewConnection(es.tcpConn, opts...)
-		if err != nil {
-			return nil, err
-		}
-		es.amqpConn = amqpConn
+	session, err := es.client.NewSession()
+	if err != nil {
+		return nil, err
 	}
 
-	sopts := []electron.LinkOption{electron.Target(target)}
-	s, err := es.amqpConn.Sender(sopts...)
+	s, err := session.NewSender(amqp.LinkTargetAddress(target))
 	if err != nil {
 		return nil, err
 	}
@@ -82,16 +69,15 @@ func (es *AmqpEventStore) Publisher(target string) (*AmqpPublisher, error) {
 }
 
 func (pub *AmqpPublisher) Send(event *Event) error {
-	m := amqp.NewMessage()
 	data, err := json.Marshal(event)
 	if err != nil {
 		log.Print("Serializing event:", err)
 		return err
 	}
-	m.Marshal(data)
-	outcome := pub.snd.SendSync(m)
-	if outcome.Status == electron.Unsent || outcome.Status == electron.Unacknowledged {
-		return outcome.Error
+	m := amqp.NewMessage(data)
+	err = pub.snd.Send(context.TODO(), m)
+	if err != nil {
+		return err
 	}
 	return nil
 

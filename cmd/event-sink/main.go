@@ -7,13 +7,14 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/lulf/teig-event-sink/pkg/eventsource"
-	"github.com/lulf/teig-event-sink/pkg/eventstore"
 	"io/ioutil"
 	"log"
 	"os"
-	"qpid.apache.org/amqp"
-	"qpid.apache.org/electron"
+
+	"pack.ag/amqp"
+
+	"github.com/lulf/teig-event-sink/pkg/eventsource"
+	"github.com/lulf/teig-event-sink/pkg/eventstore"
 )
 
 func main() {
@@ -85,27 +86,24 @@ func main() {
 
 func runSink(pub *eventstore.AmqpPublisher, sub *eventsource.AmqpSubscription) {
 	for {
-		if rm, err := sub.Receive(); err == nil {
-			err := handleMessage(pub, rm.Message)
+		if msg, err := sub.Receive(); err == nil {
+			err := handleMessage(pub, msg)
 			if err != nil {
 				log.Print("Insert entry into datastore:", err)
-				rm.Reject()
+				msg.Reject(nil)
 			} else {
-				rm.Accept()
+				msg.Accept()
 			}
-		} else if err == electron.Closed {
-			log.Print("Telemetry subscription closed")
-			return
 		} else {
 			log.Print("Receive telemetry message:", err)
 		}
 	}
 }
 
-func handleMessage(pub *eventstore.AmqpPublisher, message amqp.Message) error {
-	deviceId := message.ApplicationProperties()["device_id"].(string)
-	creationTime := message.Properties()["creation-time"].(int64)
-	payload := message.Body().(string)
+func handleMessage(pub *eventstore.AmqpPublisher, message *amqp.Message) error {
+	deviceId := message.ApplicationProperties["device_id"].(string)
+	creationTime := message.Properties.CreationTime.Unix()
+	payload := message.Value.(string)
 
 	event := eventstore.NewEvent(deviceId, creationTime, payload)
 
