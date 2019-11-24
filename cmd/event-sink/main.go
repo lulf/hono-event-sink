@@ -26,7 +26,7 @@ func main() {
 	var tlsEnabled bool
 	var cafile string
 
-	flag.StringVar(&eventstoreAddr, "a", "127.0.0.1:5672", "Address of AMQP event store")
+	flag.StringVar(&eventstoreAddr, "a", "amqp://127.0.0.1:5672", "Address of AMQP event store")
 	flag.StringVar(&eventsourceAddr, "e", "", "Address of AMQP event source")
 	flag.StringVar(&username, "u", "", "Username for AMQP event source")
 	flag.StringVar(&password, "p", "", "Password for AMQP event source")
@@ -46,7 +46,7 @@ func main() {
 
 	eventStore := eventstore.NewAmqpEventStore(eventstoreAddr)
 
-	telemetryPub, err := eventStore.Publisher("events")
+	telemetryPub, err := eventStore.Publisher("telemetry")
 	if err != nil {
 		log.Fatal("Creating publisher for telemetry:", err)
 	}
@@ -67,12 +67,12 @@ func main() {
 	es := eventsource.NewAmqpEventSource(eventsourceAddr, username, password, tlsEnabled, ca)
 	defer es.Close()
 
-	telemetrySub, err := es.Subscribe("telemetry/teig.iot")
+	telemetrySub, err := es.Subscribe("telemetry/tad3e7d23cfe04e04ba0b98859744a063")
 	if err != nil {
 		log.Fatal("Subscribing to telemetry:", err)
 	}
 
-	eventSub, err := es.Subscribe("event/teig.iot")
+	eventSub, err := es.Subscribe("event/tad3e7d23cfe04e04ba0b98859744a063")
 	if err != nil {
 		log.Fatal("Subscribing to event:", err)
 	}
@@ -103,7 +103,7 @@ func runSink(pub *eventstore.AmqpPublisher, sub *eventsource.AmqpSubscription) {
 func handleMessage(pub *eventstore.AmqpPublisher, message *amqp.Message) error {
 	deviceId := message.ApplicationProperties["device_id"].(string)
 	creationTime := message.Properties.CreationTime.Unix()
-	payload := message.Value.(string)
+	payload := string(message.GetData())
 
 	event := eventstore.NewEvent(deviceId, creationTime, payload)
 
