@@ -69,7 +69,7 @@ func runSender(device string, sender *amqp.Sender, wait int) {
 			value = 0.0
 		}
 
-		payload := fmt.Sprintf("%f", 15.0+(10.0*math.Sin(value)))
+		payload := fmt.Sprintf("{temperature:%f}", 15.0+(10.0*math.Sin(value)))
 		value += step
 		event := eventstore.NewEvent(device, now, payload)
 		data, err := json.Marshal(event)
