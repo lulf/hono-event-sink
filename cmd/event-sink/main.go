@@ -5,6 +5,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -21,21 +22,21 @@ func main() {
 
 	var eventstoreAddr string
 	var eventsourceAddr string
-	var username string
+	var tenantId string
 	var password string
 	var tlsEnabled bool
 	var cafile string
 
 	flag.StringVar(&eventstoreAddr, "a", "amqp://127.0.0.1:5672", "Address of AMQP event store")
-	flag.StringVar(&eventsourceAddr, "e", "", "Address of AMQP event source")
-	flag.StringVar(&username, "u", "", "Username for AMQP event source")
+	flag.StringVar(&eventsourceAddr, "e", "messaging.bosch-iot-hub.com:5671", "Address of AMQP event source")
+	flag.StringVar(&tenantId, "t", "", "Tenant ID for Bosch IoT Hub")
 	flag.StringVar(&password, "p", "", "Password for AMQP event source")
 	flag.BoolVar(&tlsEnabled, "s", false, "Enable TLS")
 	flag.StringVar(&cafile, "c", "", "Certificate CA file")
 
 	flag.Usage = func() {
 		fmt.Printf("Usage of %s:\n", os.Args[0])
-		fmt.Printf("    -e example.com:5672 [-u user] [-p password] [-s] [-c cafile] [-a 127.0.0.1:5672] \n")
+		fmt.Printf("    -e example.com:5672 [-t tenant_id] [-p password] [-s] [-c cafile] [-a 127.0.0.1:5672] \n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -46,7 +47,7 @@ func main() {
 
 	eventStore := eventstore.NewAmqpEventStore(eventstoreAddr)
 
-	telemetryPub, err := eventStore.Publisher("telemetry")
+	telemetryPub, err := eventStore.Publisher("events")
 	if err != nil {
 		log.Fatal("Creating publisher for telemetry:", err)
 	}
@@ -64,15 +65,16 @@ func main() {
 		}
 	}
 
+	username := fmt.Sprintf("messaging@%s", tenantId)
 	es := eventsource.NewAmqpEventSource(eventsourceAddr, username, password, tlsEnabled, ca)
 	defer es.Close()
 
-	telemetrySub, err := es.Subscribe("telemetry/tad3e7d23cfe04e04ba0b98859744a063")
+	telemetrySub, err := es.Subscribe(fmt.Sprintf("telemetry/%s", tenantId))
 	if err != nil {
 		log.Fatal("Subscribing to telemetry:", err)
 	}
 
-	eventSub, err := es.Subscribe("event/tad3e7d23cfe04e04ba0b98859744a063")
+	eventSub, err := es.Subscribe(fmt.Sprintf("event/%s", tenantId))
 	if err != nil {
 		log.Fatal("Subscribing to event:", err)
 	}
@@ -103,9 +105,13 @@ func runSink(pub *eventstore.AmqpPublisher, sub *eventsource.AmqpSubscription) {
 func handleMessage(pub *eventstore.AmqpPublisher, message *amqp.Message) error {
 	deviceId := message.ApplicationProperties["device_id"].(string)
 	creationTime := message.Properties.CreationTime.Unix()
-	payload := string(message.GetData())
 
-	event := eventstore.NewEvent(deviceId, creationTime, payload)
+	var result map[string]interface{} = make(map[string]interface{}, 0)
+	err := json.Unmarshal(message.GetData(), &result)
+	if err != nil {
+		return err
+	}
+	event := eventstore.NewEvent(deviceId, creationTime, result)
 
 	return pub.Send(event)
 }

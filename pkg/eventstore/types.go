@@ -5,7 +5,7 @@
 package eventstore
 
 type Event struct {
-	CreationTime int64  `json:"creationTime"`
-	DeviceId     string `json:"deviceId"`
-	Payload      string `json:"payload"`
+	CreationTime int64                  `json:"creationTime"`
+	DeviceId     string                 `json:"deviceId"`
+	Data         map[string]interface{} `json:"data"`
 }

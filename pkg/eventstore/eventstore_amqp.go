@@ -87,10 +87,10 @@ func (pub *AmqpPublisher) Close() {
 	pub.snd.Close(nil)
 }
 
-func NewEvent(deviceId string, creationTime int64, payload string) *Event {
+func NewEvent(deviceId string, creationTime int64, data map[string]interface{}) *Event {
 	return &Event{
 		CreationTime: creationTime,
 		DeviceId:     deviceId,
-		Payload:      payload,
+		Data:         data,
 	}
 }
