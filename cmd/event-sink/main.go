@@ -91,7 +91,7 @@ func runSink(pub *eventstore.AmqpPublisher, sub *eventsource.AmqpSubscription) {
 		if msg, err := sub.Receive(); err == nil {
 			err := handleMessage(pub, msg)
 			if err != nil {
-				log.Print("Insert entry into datastore:", err)
+				log.Print("Insert message into datastore", msg.GetData(), err)
 				msg.Reject(nil)
 			} else {
 				msg.Accept()
@@ -109,6 +109,7 @@ func handleMessage(pub *eventstore.AmqpPublisher, message *amqp.Message) error {
 	var result map[string]interface{} = make(map[string]interface{}, 0)
 	err := json.Unmarshal(message.GetData(), &result)
 	if err != nil {
+		log.Println("Failed decoding message", message.GetData())
 		return err
 	}
 	event := eventstore.NewEvent(deviceId, creationTime, result)
