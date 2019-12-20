@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -79,25 +80,45 @@ func main() {
 		log.Fatal("Subscribing to event:", err)
 	}
 
-	go func() {
-		runSink(telemetryPub, telemetrySub)
-	}()
+	done := make(chan error)
+	go runSink(telemetryPub, telemetrySub, done)
+	go runSink(eventPub, eventSub, done)
 
-	runSink(eventPub, eventSub)
+	// Exit if any of our processes complete
+	log.Println("Event sink running")
+	for {
+		err := <-done
+		if err != nil {
+			log.Println("Sink finished with error", err)
+			os.Exit(1)
+		} else {
+			log.Println("Sink finished without error")
+			os.Exit(0)
+		}
+	}
 }
 
-func runSink(pub *eventstore.AmqpPublisher, sub *eventsource.AmqpSubscription) {
+func runSink(pub *eventstore.AmqpPublisher, sub *eventsource.AmqpSubscription, done chan error) {
 	for {
 		if msg, err := sub.Receive(); err == nil {
+			log.Println("Received message!")
 			err := handleMessage(pub, msg)
 			if err != nil {
-				log.Print("Insert message into datastore", msg.GetData(), err)
-				msg.Reject(nil)
+				if err == io.EOF || err == amqp.ErrLinkClosed || err == amqp.ErrSessionClosed {
+					log.Println("Receive error:", err)
+					done <- err
+					break
+				} else {
+					log.Print("Error inserting message into datastore", string(msg.GetData()), err)
+					msg.Reject(nil)
+				}
 			} else {
 				msg.Accept()
 			}
 		} else {
-			log.Print("Receive telemetry message:", err)
+			log.Println("Receive error:", err)
+			done <- err
+			break
 		}
 	}
 }
