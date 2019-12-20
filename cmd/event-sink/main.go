@@ -101,7 +101,6 @@ func main() {
 func runSink(pub *eventstore.AmqpPublisher, sub *eventsource.AmqpSubscription, done chan error) {
 	for {
 		if msg, err := sub.Receive(); err == nil {
-			log.Println("Received message!")
 			err := handleMessage(pub, msg)
 			if err != nil {
 				if err == io.EOF || err == amqp.ErrLinkClosed || err == amqp.ErrSessionClosed {
