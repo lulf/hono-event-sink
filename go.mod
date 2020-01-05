@@ -1,4 +1,4 @@
-module github.com/lulf/teig-event-sink
+module github.com/lulf/hono-event-sink
 
 go 1.12
 

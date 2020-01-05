@@ -17,7 +17,7 @@ import (
 
 	"pack.ag/amqp"
 
-	"github.com/lulf/teig-event-sink/pkg/eventstore"
+	"github.com/lulf/hono-event-sink/pkg/eventstore"
 )
 
 func main() {
