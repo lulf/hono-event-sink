@@ -101,7 +101,6 @@ func main() {
 func runSink(pub *eventstore.AmqpPublisher, sub *eventsource.AmqpSubscription, done chan error) {
 	for {
 		if msg, err := sub.Receive(); err == nil {
-			err := handleMessage(pub, msg)
 			if err != nil {
 				if err == io.EOF || err == amqp.ErrLinkClosed || err == amqp.ErrSessionClosed {
 					log.Println("Receive error:", err)
@@ -112,7 +111,13 @@ func runSink(pub *eventstore.AmqpPublisher, sub *eventsource.AmqpSubscription, d
 					msg.Reject(nil)
 				}
 			} else {
-				msg.Accept()
+				err := handleMessage(pub, msg)
+				if err != nil {
+					log.Println("Error handling message", err)
+					msg.Reject(nil)
+				} else {
+					msg.Accept()
+				}
 			}
 		} else {
 			log.Println("Receive error:", err)
@@ -129,7 +134,7 @@ func handleMessage(pub *eventstore.AmqpPublisher, message *amqp.Message) error {
 	var result map[string]interface{} = make(map[string]interface{}, 0)
 	err := json.Unmarshal(message.GetData(), &result)
 	if err != nil {
-		log.Println("Failed decoding message", message.GetData())
+		log.Println("Failed decoding message", message)
 		return err
 	}
 	event := eventstore.NewEvent(deviceId, creationTime, result)
